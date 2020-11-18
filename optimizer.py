@@ -4,7 +4,6 @@ from copy import deepcopy
 from copy import copy
 from collections import defaultdict
 
-define 
 
 
 class PCASGD(Optimizer):
@@ -12,9 +11,20 @@ class PCASGD(Optimizer):
                  weight_decay=0, nesterov=False,**kwargs):
         defaults = dict(lr=lr, momentum=momentum, dampening=dampening,
                         weight_decay=weight_decay, nesterov=nesterov)
-        super(CDMSGD1, self).__init__(params, defaults)
+        super(PCASGD, self).__init__(params, defaults)
         #self.old_grad_groups = deepcopy(self.param_groups)
         self.agent_grad_groups= []
+        self.predict_matrix = torch.zeros((self.n_agents))
+        self.clip_matrix = torch.zeros((self.n_agents))
+        self.pi = torch.FloatTensor(self.pi)
+        for k in range(self.n_agents):
+            if k != self.agent_id and self.relative_matrix[self.agent_id,k] > 1:
+                self.predict_matrix[k] = 1
+            if k != self.agent_id:
+                if self.relative_matrix[self.agent_id,k] == 1:
+                    self.clip_matrix[k] = 1
+
+
 
     def __setstate__(self, state):
         super(CDMSGD1, self).__setstate__(state)
@@ -91,20 +101,24 @@ class PCASGD(Optimizer):
 
                 if predict_start:
                     predict_tensor = deepcopy(con_buf)
+                    a = torch.add(p.data,groups_use_para[self.agent_id].mul_(-1))
+                    predict_tensor.add_(groups_use_grad*groups_use_grad*a*-group['lr']*self.pi[self.agent_id]*self.predict_matrix)
+                    
+                    predict = torch.cosine_similarity(predict_tensor-p.data,d_p)
+
+                    '''
                     for k in range(self.n_agents):
                         if k != self.agent_id and self.relative_matrix[self.agent_id,k] > 1:
                             temp_use = torch.zeros(p.data.size())
                             #predict_tensor.add_(torch.mul(groups_use_grad[k],-group['lr']*self.pi[self.agent_id][k]))
                             predict_tensor.add_(torch.mul(torch.mul(torch.mul(groups_use_grad[k],self.pi[self.agent_id][k]),torch.mul(groups_use_grad[k],torch.add(p.data,groups_use_para[self.agent_id].mul_(-1)))),-group['lr']))
-                    predict =  torch.norm(torch.mul(torch.add(predict_tensor,torch.mul(p.data,-1)),d_p))/torch.norm(torch.add(predict_tensor,torch.mul(p.data,-1)))
-                    clip_tensor = torch.zeros(p.data.size()).cuda()
-                    clip_tensor.add_(p.data).mul_(1/(1+m))
-                    clip_tensor.add_(hb_buf)
-                    for k in range(self.n_agents):
-                            if k != self.agent_id:
-                                if self.relative_matrix[self.agent_id,k] == 1:
-                                    (clip_tensor).add_(1/(1+m), groups_use_para[k])
-                    clip =  torch.norm(torch.mul(torch.add(clip_tensor,torch.mul(p.data,-1)),d_p))/torch.norm(torch.add(clip_tensor,torch.mul(p.data,-1)))
+                    '''
+                    #predict = torch.norm(torch.mul(torch.add(predict_tensor,torch.mul(p.data,-1)),d_p))/torch.norm(torch.add(predict_tensor,torch.mul(p.data,-1)))
+                    
+                    clip_tensor = (p.data).mul_(1/(1+m))+hb_buf
+                    (clip_tensor).add_(1/(1+m), groups_use_para*self.clip_matrix)
+                    #clip = torch.norm(torch.mul(torch.add(clip_tensor,torch.mul(p.data,-1)),d_p))/torch.norm(torch.add(clip_tensor,torch.mul(p.data,-1)))
+                    clip = torch.cosine_similarity(clip_tensor-p.data,d_p)
                     if predict > clip:
                         p.data = predict_tensor
                     else:
