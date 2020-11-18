@@ -39,8 +39,8 @@ class PCASGD(Optimizer):
 				#groups_use_grad = [None]*self.n_agents
 				if p.grad is None:
 					continue
-                '''
-				d_p = deepcopy(p.grad.data)
+                
+				d_p = p.grad.data
 				m = 0
 				param_state = self.state[p]
 				if 'hb_buffer' not in param_state:
@@ -50,7 +50,7 @@ class PCASGD(Optimizer):
 
 				hb_buf.mul_(momentum)
 				hb_buf.add_(-group['lr'],d_p)
-                '''
+                
 				#self.old_grad_groups[i]['params'][j].data = deepcopy(p.grad.data)
 				#con_buf = torch.zeros(p.data.size()).cuda()
 				con_buf = (p.data).mul_(self.pi[self.agent_id][self.agent_id])
@@ -60,10 +60,20 @@ class PCASGD(Optimizer):
                         if k==0:
 						    groups_use_para = (self.agent_param_groups[k][i]['params'][j].data)
                         else:
-						    groups_use_para = torch.cat(groups_use_para, self.agent_param_groups[k][i]['params'][j].data)
-                            
-
-                
+						    groups_use_para = torch.cat((groups_use_para, self.agent_param_groups[k][i]['params'][j].data),0)
+                    if self.agent_grad_groups[k] is not None:
+                        if k==0:
+						    groups_use_grad = (self.agent_grad_groups[k][i]['params'][j])
+                        else:
+						    groups_use_grad = torch.cat((groups_use_para, (self.agent_grad_groups[k][i]['params'][j]).data),0)
+					if k != self.agent_id:
+						if self.relative_matrix[self.agent_id,k] == 1:
+							m = m + 1
+                    else:
+                        self.pi[self.agent_id][k]=0
+                (con_buf).add_(self.pi[self.agent_id], groups_use_para)       
+                   
+                '''
 				for k in range(self.n_agents):
 					if self.agent_param_groups[k] is not None:
 						groups_use_para[k] = (self.agent_param_groups[k][i]['params'][j])
@@ -72,10 +82,9 @@ class PCASGD(Optimizer):
 					if k != self.agent_id:
 						if self.relative_matrix[self.agent_id,k] == 1:
 							m = m + 1
-						
+				'''		
                         #(con_buf).add_(self.pi[self.agent_id][k], groups_use_para[k])
                 
-
 				con_buf.add_(hb_buf)
 				p.data = con_buf
 				param_state['hb_buffer'] = hb_buf
