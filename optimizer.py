@@ -4,6 +4,8 @@ from copy import deepcopy
 from copy import copy
 from collections import defaultdict
 
+define 
+
 
 class PCASGD(Optimizer):
 	def __init__(self, params, lr=0.01, momentum=0.95, dampening=0,
@@ -33,8 +35,8 @@ class PCASGD(Optimizer):
 			nesterov = group['nesterov']
 			for j, p in enumerate(group['params']):
 
-				groups_use_para = [None]*self.n_agents
-				groups_use_grad = [None]*self.n_agents
+				#groups_use_para = [None]*self.n_agents
+				#groups_use_grad = [None]*self.n_agents
 				if p.grad is None:
 					continue
                 '''
@@ -52,18 +54,32 @@ class PCASGD(Optimizer):
 				#self.old_grad_groups[i]['params'][j].data = deepcopy(p.grad.data)
 				#con_buf = torch.zeros(p.data.size()).cuda()
 				con_buf = (p.data).mul_(self.pi[self.agent_id][self.agent_id])
+
+                for k in range(self.n_agents):
+                    if self.agent_param_groups[k] is not None:
+                        if k==0:
+						    groups_use_para = (self.agent_param_groups[k][i]['params'][j].data)
+                        else:
+						    groups_use_para = torch.cat(groups_use_para, self.agent_param_groups[k][i]['params'][j].data)
+                            
+
+                
 				for k in range(self.n_agents):
 					if self.agent_param_groups[k] is not None:
-						groups_use_para[k] = (self.agent_param_groups[k][i]['params'][j].data)
+						groups_use_para[k] = (self.agent_param_groups[k][i]['params'][j])
 					if self.agent_grad_groups[k] is not None:	
-						groups_use_grad[k] = (self.agent_grad_groups[k][i]['params'][j].data)
+						groups_use_grad[k] = (self.agent_grad_groups[k][i]['params'][j])
 					if k != self.agent_id:
 						if self.relative_matrix[self.agent_id,k] == 1:
 							m = m + 1
-						(con_buf).add_(self.pi[self.agent_id][k], groups_use_para[k])
+						
+                        #(con_buf).add_(self.pi[self.agent_id][k], groups_use_para[k])
+                
+
 				con_buf.add_(hb_buf)
 				p.data = con_buf
 				param_state['hb_buffer'] = hb_buf
+
 				if predict_start:
 					predict_tensor = deepcopy(con_buf)
 					for k in range(self.n_agents):
